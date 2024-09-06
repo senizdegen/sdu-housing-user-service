@@ -97,13 +97,20 @@ func (h *Handler) CreateUser(w http.ResponseWriter, r *http.Request) error {
 	if err := json.NewDecoder(r.Body).Decode(&crUser); err != nil {
 		return apperror.BadRequestError("invalid JSON scheme. check swagger API")
 	}
-	userUUID, err := h.UserService.Create(r.Context(), crUser)
+	u, err := h.UserService.Create(r.Context(), crUser)
 	if err != nil {
 		return err
 	}
 
-	w.Header().Set("Location", fmt.Sprintf("%s/%s", usersURL, userUUID))
+	userBytes, err := json.Marshal(u)
+	if err != nil {
+		return err
+	}
+
 	w.WriteHeader(http.StatusCreated)
+	w.Write(userBytes)
+
+	h.Logger.Tracef("token: %s", u.JWTToken)
 
 	return nil
 }

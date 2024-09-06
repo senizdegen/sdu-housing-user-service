@@ -55,15 +55,18 @@ func (s *db) FindOne(ctx context.Context, uuid string) (u user.User, err error) 
 }
 
 func (s *db) FindByPhoneNumber(ctx context.Context, phoneNumber string) (u user.User, err error) {
+	s.logger.Debug("FIND BY PHONE NUMBER")
 	filter := bson.M{"phone_number": phoneNumber}
 
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	result := s.collection.FindOne(ctx, filter)
+	s.logger.Trace(result)
 
 	if err != nil {
 		if errors.Is(result.Err(), mongo.ErrNoDocuments) {
+			s.logger.Error("error not found")
 			return u, apperror.ErrNotFound
 		}
 		return u, fmt.Errorf("failed to execute query. error: %w", err)
@@ -88,6 +91,5 @@ func (s *db) Create(ctx context.Context, user user.User) (string, error) {
 	if ok {
 		return oid.Hex(), nil
 	}
-
-	return "", fmt.Errorf("failed to convert objectid to hex")
+	return "", fmt.Errorf("failed to convert object id to hex")
 }

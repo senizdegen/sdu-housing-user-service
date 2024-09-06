@@ -44,7 +44,7 @@ type UserClaims struct {
 type Service interface {
 	GetOne(ctx context.Context, uuid string) (User, error)
 	GetByPhoneNumberAndPassword(ctx context.Context, email, password string) (User, error)
-	Create(ctx context.Context, dto CreateUserDTO) (string, error)
+	Create(ctx context.Context, dto CreateUserDTO) (User, error)
 	GenerateAccessToken(u User) ([]byte, error)
 	UpdateRefreshToken(rt RT) ([]byte, error)
 }
@@ -90,10 +90,10 @@ func (s service) GetByPhoneNumberAndPassword(ctx context.Context, phoneNumber, p
 	return u, nil
 }
 
-func (s *service) Create(ctx context.Context, dto CreateUserDTO) (userUUID string, err error) {
+func (s *service) Create(ctx context.Context, dto CreateUserDTO) (u User, err error) {
 	s.logger.Debug("check password and repeated password")
 	if dto.Password != dto.RepeatPassword {
-		return userUUID, apperror.BadRequestError("password does not match repeated password")
+		return u, apperror.BadRequestError("password does not match repeated password")
 	}
 
 	user := NewUser(dto)
@@ -105,15 +105,28 @@ func (s *service) Create(ctx context.Context, dto CreateUserDTO) (userUUID strin
 		return
 	}
 
-	userUUID, err = s.storage.Create(ctx, user)
+	userUUID, err := s.storage.Create(ctx, user)
 	if err != nil {
 
 		if errors.Is(err, apperror.ErrNotFound) {
-			return userUUID, err
+			return u, err
 		}
-		return userUUID, fmt.Errorf("failed to create user. error: %s", err)
+		return u, fmt.Errorf("failed to create user. error: %s", err)
 	}
-	return userUUID, nil
+
+	u, err = s.GetOne(ctx, userUUID)
+	if err != nil {
+		return u, fmt.Errorf("failed to create user. error: %s", err)
+	}
+
+	s.logger.Info("Generate jwt token")
+	tokenBytes, err := s.GenerateAccessToken(u)
+	if err != nil {
+		return u, fmt.Errorf("failed to generate token. error: %s", err)
+	}
+
+	u.JWTToken = string(tokenBytes)
+	return u, nil
 }
 
 func (s *service) GenerateAccessToken(u User) ([]byte, error) {
